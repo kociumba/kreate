@@ -20,7 +20,7 @@ void main(string[] args) {
 
     executable("myapp", ["src/main.odin"]) // kreate has basic support for d, go and odin, anything else requires using custom targets
 
-    customTarget("odin-docs", ["src/main.odin"], "src/main.odin-doc", "odin doc src -out:main")
+    customTarget("odin-docs", ["src/main.odin"], "src/main.odin-doc", ["odin", "doc", "src", "-out:main"])
 
     kreateInit() // if not initialized kreate will not do anything
 }
