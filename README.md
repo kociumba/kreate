@@ -11,18 +11,18 @@ If you want faster builds you can compile this system using something like `dmd 
 **Example build:**
 
 ```d
-module build
+module build;
 
-import kreate // imports can be relative paths when using rdmd
+import kreate; // imports can be relative paths when using rdmd
 
 void main(string[] args) {
     project("gabagool", "0.0.1", ["d", "go"], args); // create a sample project
 
-    executable("myapp", ["src/main.odin"]) // kreate has basic support for d, go and odin, anything else requires using custom targets
+    executable("myapp", ["src/main.odin"]); // kreate has basic support for d, go and odin, anything else requires using custom targets
 
-    customTarget("odin-docs", ["src/main.odin"], "src/main.odin-doc", ["odin", "doc", "src", "-out:main"])
+    customTarget("odin-docs", ["src/main.odin"], "src/main.odin-doc", ["odin", "doc", "src", "-out:main"]);
 
-    kreateInit() // if not initialized kreate will not do anything
+    kreateInit(); // if not initialized kreate will not do anything
 }
 ```
 

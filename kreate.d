@@ -62,8 +62,8 @@ Lang[] supported = [go, d, odin];
 struct Log {
     static const string infoCol = "\x1B[38;5;87m";
     static const string warnCol = "\x1B[38;5;214m";
-    static const string erroCol = "\x1B[38;5;196m";
-    static const string fataCol = "\x1B[38;5;202m";
+    static const string fataCol = "\x1B[38;5;196m";
+    static const string erroCol = "\x1B[38;5;202m";
     static const string reset = "\x1B[0m";
 
     /// make this noop for now
