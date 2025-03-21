@@ -46,7 +46,7 @@ struct Target {
     string outputFile;
     Target[] dependencies;
     string[] flags;
-    string customCommand;
+    string[] customCommand;
     string mainDir;
     string[] importPaths;
 }
@@ -220,7 +220,7 @@ bool needsRebuild(string filePath, string buildDir) {
 }
 
 bool executeBuildCommand(Target target) {
-    string cmd;
+    string[] cmd;
     string lang = detectLanguage(target.sourceFiles);
 
     if (target.targetType == TargetType.CUSTOM) {
@@ -236,8 +236,8 @@ bool executeBuildCommand(Target target) {
         return false;
     }
 
-    Log.info("Executing: " ~ cmd);
-    auto result = executeShell(cmd);
+    Log.info("Executing: " ~ cmd.join(" "));
+    auto result = execute(cmd);
     if (result.status != 0) {
         Log.error("Build failed: " ~ result.output);
         return false;
@@ -247,37 +247,33 @@ bool executeBuildCommand(Target target) {
     return true;
 }
 
-string buildDCommand(Target target) {
-    string cmd = "dmd ";
+string[] buildDCommand(Target target) {
+    string[] cmd = ["dmd"];
 
     if (target.flags.length > 0) {
-        cmd ~= join(target.flags, " ") ~ " ";
+        cmd ~= target.flags;
     }
 
     if (target.targetType == TargetType.STATIC_LIB) {
-        cmd ~= "-lib ";
+        cmd ~= "-lib";
     } else if (target.targetType == TargetType.DYNAMIC_LIB) {
-        cmd ~= "-shared ";
+        cmd ~= "-shared";
     }
 
-    cmd ~= "-of=" ~ target.outputFile ~ " ";
-
-    cmd ~= join(target.sourceFiles, " ") ~ " ";
+    cmd ~= "-of=" ~ target.outputFile;
+    cmd ~= target.sourceFiles;
 
     foreach (dep; target.dependencies) {
         if (dep.targetType == TargetType.STATIC_LIB || dep.targetType == TargetType.DYNAMIC_LIB) {
-
-            cmd ~= "-L-L" ~ dirName(dep.outputFile) ~ " ";
+            cmd ~= "-L-L" ~ dirName(dep.outputFile);
 
             string libName = baseName(dep.outputFile);
-
             if (libName.startsWith("lib")) {
                 libName = libName[3 .. $];
             }
 
             libName = stripExtension(libName);
-
-            cmd ~= "-L-l" ~ libName ~ " ";
+            cmd ~= "-L-l" ~ libName;
         }
     }
 
@@ -285,54 +281,51 @@ string buildDCommand(Target target) {
 }
 
 /// use -C to simplify package detection
-string buildGoCommand(Target target) {
+string[] buildGoCommand(Target target) {
     string mainDir = inferMainDir(target.sourceFiles);
+    string[] cmd = ["go", "build"];
 
-    string cmd = "go build ";
-
-    cmd ~= "-C " ~ mainDir ~ " ";
+    cmd ~= "-C";
+    cmd ~= mainDir;
 
     if (target.flags.length > 0) {
-        cmd ~= join(target.flags, " ") ~ " ";
+        cmd ~= target.flags;
     }
 
     if (target.targetType == TargetType.DYNAMIC_LIB) {
-        cmd ~= "-buildmode=c-shared ";
+        cmd ~= "-buildmode=c-shared";
     } else if (target.targetType == TargetType.STATIC_LIB) {
         cmd ~= "-buildmode=c-archive";
     }
 
     auto absOutput = asNormalizedPath(asAbsolutePath(target.outputFile));
 
-    cmd ~= "-o " ~ absOutput.array ~ " ";
-
+    cmd ~= "-o";
+    cmd ~= absOutput.array;
     cmd ~= ".";
 
     return cmd;
 }
 
-string buildOdinCommand(Target target) {
+string[] buildOdinCommand(Target target) {
     string mainDir = inferMainDir(target.sourceFiles);
-
-    string cmd = "odin build ";
-
-    cmd ~= mainDir ~ " ";
+    string[] cmd = ["odin", "build ", mainDir];
 
     if (target.flags.length > 0) {
-        cmd ~= join(target.flags, " ") ~ " ";
+        cmd ~= target.flags;
     }
 
     if (target.targetType == TargetType.STATIC_LIB) {
-        cmd ~= "-build-mode:static ";
+        cmd ~= "-build-mode:static";
     } else if (target.targetType == TargetType.DYNAMIC_LIB) {
-        cmd ~= "-build-mode:shared ";
+        cmd ~= "-build-mode:shared";
     }
 
-    cmd ~= "-out:" ~ target.outputFile ~ " ";
+    cmd ~= "-out:" ~ target.outputFile;
 
     foreach (dep; target.dependencies) {
         if (dep.targetType == TargetType.STATIC_LIB) {
-            cmd ~= "-library:" ~ dep.outputFile ~ " ";
+            cmd ~= "-library:" ~ dep.outputFile;
         }
     }
 
@@ -434,7 +427,7 @@ Target executable(string name, string[] sourceFiles, Target[] dependencies = [],
     if (lang == "d") {
         flags = ["-O", "-release"];
     } else if (lang == "go") {
-        flags = ["-ldflags", "\"-s -w\""];
+        flags = ["-ldflags", "-s -w"];
     } else if (lang == "odin") {
         flags = ["-o:speed"];
     }
@@ -448,7 +441,7 @@ Target executable(string name, string[] sourceFiles, Target[] dependencies = [],
         outputFile,
         dependencies,
         flags,
-        "",
+        [],
         mainDir,
         importPaths
     );
@@ -467,7 +460,7 @@ Target staticLib(string name, string[] sourceFiles, Target[] dependencies = [], 
     if (lang == "d") {
         flags = ["-O", "-release"];
     } else if (lang == "go") {
-        flags = ["-ldflags", "\"-s -w\""];
+        flags = ["-ldflags", "-s -w"];
     } else if (lang == "odin") {
         flags = ["-o:speed"];
     }
@@ -481,7 +474,7 @@ Target staticLib(string name, string[] sourceFiles, Target[] dependencies = [], 
         outputFile,
         dependencies,
         flags,
-        "",
+        [],
         mainDir,
         importPaths
     );
@@ -510,7 +503,7 @@ Target dynamicLib(string name,
     if (lang == "d") {
         flags = ["-O", "-release"];
     } else if (lang == "go") {
-        flags = ["-ldflags", "\"-s -w\""];
+        flags = ["-ldflags", "-s -w"];
     } else if (lang == "odin") {
         flags = ["-o:speed"];
     }
@@ -524,7 +517,7 @@ Target dynamicLib(string name,
         outputFile,
         dependencies,
         flags,
-        "",
+        [],
         mainDir,
         importPaths
     );
@@ -538,7 +531,7 @@ Target dynamicLib(string name,
 Target customTarget(string name,
     string[] sourceFiles,
     string outputFile,
-    string customCommand,
+    string[] customCommand,
     Target[] dependencies = []) {
     Target target = Target(
         name,
