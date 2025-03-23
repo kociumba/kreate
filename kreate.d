@@ -549,6 +549,45 @@ Target customTarget(string name,
     return target;
 }
 
+/// simple function that recursively finds a file in any location beneeth the current dir
+string findFile(string name) {
+    if (exists(name)) {
+        return asNormalizedPath(asAbsolutePath(name)).array;
+    }
+
+    // very non c like, reminds me of kotlin
+    auto entries = dirEntries(".", SpanMode.depth)
+        .filter!(e => e.isFile && baseName(e.name) == baseName(name));
+    if (!entries.empty) {
+        return asNormalizedPath(asAbsolutePath(entries.front.name)).array;
+    }
+
+    Log.fatal("could not find: " ~ name ~ " in the current dir, ensure the file exists or use a simple relative path");
+    return null;
+}
+
+/// does the same as @findFile but searches in known global paths like for example the INCLUDE env var
+string findGlobal(string name) {
+    string searchPaths = environment.get("INCLUDE");
+    if (searchPaths == null || searchPaths.empty) {
+        Log.fatal("Environment variable INCLUDE is not set or is empty");
+        return null;
+    }
+
+    auto searchDirs = split(searchPaths, pathSeparator);
+    auto validDirs = searchDirs.filter!(a => !a.empty && isValidPath(a)).array;
+
+    foreach (dir; validDirs) {
+        string path = buildPath(dir, name);
+        if (exists(path) && isFile(path)) {
+            return asNormalizedPath(asAbsolutePath(path)).array;
+        }
+    }
+
+    Log.fatal("Could not find: " ~ name ~ " in any of the directories in INCLUDE");
+    return "";
+}
+
 /// executes the build of all targets or the onse that are passed in
 void kreateBuild(string[] targetNames = []) {
     if (targetNames.length == 0) {
