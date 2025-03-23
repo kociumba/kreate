@@ -10,7 +10,7 @@ If you want faster builds you can compile this system using something like `dmd 
 
 **Example build:**
 
-```d
+```d:build.d
 module build;
 
 import kreate; // imports can be relative paths when using rdmd
