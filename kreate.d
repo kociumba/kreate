@@ -268,27 +268,27 @@ bool executeBuildCommand(Target target) {
     // Log.info("Executing: " ~ cmd.join(" "));
     auto result = execute(cmd);
     if (result.status != 0) {
-        Log.error(Log.clearLine 
-            ~ "\rBuilding target: " 
-            ~ target.name 
-            ~ Log.erroCol 
-            ~ " [ERRO] " 
-            ~ Log.reset
-            ~ ":\n" 
-            ~ result.output);
+        Log.error(Log.clearLine
+                ~ "\rBuilding target: "
+                ~ target.name
+                ~ Log.erroCol
+                ~ " [ERRO] "
+                ~ Log.reset
+                ~ ":\n"
+                ~ result.output);
         return false;
     }
 
     auto duration = MonoTime.currTime - start;
     Log.info(Log.clearLine
-        ~ "\rBuilding target: " 
-        ~ target.name 
-        ~ Log.okCol 
-        ~ " [OK] " 
-        ~ Log.reset 
-        ~ Log.dim 
-        ~ duration.toString() 
-        ~ Log.reset);
+            ~ "\rBuilding target: "
+            ~ target.name
+            ~ Log.okCol
+            ~ " [OK] "
+            ~ Log.reset
+            ~ Log.dim
+            ~ duration.toString()
+            ~ Log.reset);
     return true;
 }
 
@@ -413,35 +413,6 @@ string detectLanguage(string[] sourceFiles) {
     return ""; // doesn't matter what we return since Log.fatal exits either way
 }
 
-/// manages the build of a given target
-bool buildTarget(ref Target target) {
-    if (!needsRebuildTarget(target)) {
-        Log.info("Target " ~ target.name ~ " is up to date");
-        return true;
-    }
-
-    foreach (ref dependency; target.dependencies) {
-        if (!buildTarget(dependency)) {
-            Log.error("Failed to build dependency: " ~ dependency.name);
-            return false;
-        }
-    }
-
-    string outputDir = dirName(target.outputFile);
-    k_mkdir(outputDir);
-
-    if (!executeBuildCommand(target)) {
-        return false;
-    }
-
-    foreach (sourceFile; target.sourceFiles) {
-        auto checksum = calculateChecksum(sourceFile);
-        saveChecksum(checksum, projectConfig.buildDir);
-    }
-
-    return true;
-}
-
 /// determines if a given target needs to be rebuilt
 bool needsRebuildTarget(ref Target target) {
     string buildDir = projectConfig.buildDir;
@@ -457,7 +428,7 @@ bool needsRebuildTarget(ref Target target) {
     }
 
     foreach (ref dependency; target.dependencies) {
-        if (needsRebuildTarget(dependency)) {
+        if (dependency.name in rebuiltTargets) {
             return true;
         }
     }
@@ -645,34 +616,121 @@ string findGlobal(string name) {
     return "";
 }
 
-/// executes the build of all targets or the onse that are passed in
-void kreateBuild(string[] targetNames = []) {
-    if (targetNames.length == 0) {
-        foreach (ref target; targets) {
-            if (!buildTarget(target)) {
-                Log.fatal("Build failed for target: " ~ target.name);
-            }
-        }
-    } else {
-        foreach (targetName; targetNames) {
-            bool found = false;
-            foreach (ref target; targets) {
-                if (target.name == targetName) {
-                    if (!buildTarget(target)) {
-                        Log.fatal("Build failed for target: " ~ targetName);
-                    }
-                    found = true;
-                    break;
-                }
-            }
+Target[string] targetMap;
+Target[][string] dependentTargets;
+bool[string] builtTargets;
+bool[string] rebuiltTargets;
 
-            if (!found) {
-                Log.fatal("Target not found: " ~ targetName);
+/// populates the dependency graph with data fro sorting
+void buildDependencyGraph() {
+    foreach (ref target; targets) {
+        targetMap[target.name] = target;
+        foreach (ref dep; target.dependencies) {
+            dependentTargets[dep.name] ~= target;
+        }
+    }
+
+    if (hasArg("-graph")) {
+        writeln("dep graph: ", targetMap);
+        writeln("dependents: ", dependentTargets);
+    }
+}
+
+/// uses kahn's algorithm to sort the graph topologically eliminating duplicates
+Target[] topologicalSort() {
+    buildDependencyGraph();
+    Target[] sortedOrder;
+    Target[] queue;
+
+    Target[][string] remainingDeps;
+    foreach (ref target; targets) {
+        remainingDeps[target.name] = target.dependencies.dup;
+    }
+
+    foreach (ref target; targets) {
+        if (remainingDeps[target.name].length == 0) {
+            queue ~= target;
+        }
+    }
+
+    while (queue.length > 0) {
+        Target current = queue[0];
+        queue = queue[1 .. $];
+        sortedOrder ~= current;
+
+        if (current.name in dependentTargets) {
+            foreach (ref dependent; dependentTargets[current.name]) {
+                auto depName = dependent.name;
+                remainingDeps[depName] = remainingDeps[depName].remove!(
+                    d => d.name == current.name
+                );
+
+                if (remainingDeps[depName].length == 0) {
+                    queue ~= dependent;
+                }
             }
         }
     }
 
+    if (sortedOrder.length != targets.length) {
+        Log.fatal("Circular dependency detected in target graph");
+        return [];
+    }
+
+    return sortedOrder;
+}
+
+/// executes the build of all targets or the ones that are passed in
+void kreateBuild(string[] targetNames = []) {
+    Target[] buildOrder;
+
+    if (targetNames.length == 0) {
+        buildOrder = topologicalSort();
+        if (buildOrder.length == 0)
+            return;
+    } else {
+        bool[string] toBuild;
+        foreach (name; targetNames) {
+            if (name !in targetMap) {
+                Log.fatal("Target not found: " ~ name);
+                return;
+            }
+            collectTargets(targetMap[name], toBuild);
+        }
+        buildOrder = topologicalSort().filter!(t => t.name in toBuild).array;
+        if (buildOrder.length == 0)
+            return;
+    }
+
+    foreach (ref target; buildOrder) {
+        if (needsRebuildTarget(target)) {
+            if (!executeBuildCommand(target)) {
+                Log.fatal("Build failed for target: " ~ target.name);
+                return;
+            }
+
+            rebuiltTargets[target.name] = true;
+            builtTargets[target.name] = true;
+
+            foreach (sourceFile; target.sourceFiles) {
+                auto checksum = calculateChecksum(sourceFile);
+                saveChecksum(checksum, projectConfig.buildDir);
+            }
+        } else {
+            builtTargets[target.name] = true;
+            Log.info("Target " ~ target.name ~ " is up to date");
+        }
+    }
+
     Log.info("Build completed successfully");
+}
+
+/// recursive target collection used for custom builds
+void collectTargets(ref Target target, ref bool[string] toBuild) {
+    toBuild[target.name] = true;
+    foreach (ref dep; target.dependencies) {
+        collectTargets(dep, toBuild);
+    }
 }
 
 /// removes the configured bin and build directories and everything in them including kreate checksums 
