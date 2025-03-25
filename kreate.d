@@ -242,6 +242,7 @@ bool needsRebuild(string filePath, string buildDir) {
 
 /// builds and executes a build command for a given target
 bool executeBuildCommand(Target target) {
+    auto start = MonoTime.currTime;
     string[] cmd;
     string lang = detectLanguage(target.sourceFiles);
 
@@ -265,7 +266,8 @@ bool executeBuildCommand(Target target) {
         return false;
     }
 
-    Log.info("Build successful, for target: " ~ target.name);
+    auto duration = MonoTime.currTime - start;
+    Log.info("Build successful, for target '" ~ target.name ~ "' in: " ~ duration.toString());
     return true;
 }
 
