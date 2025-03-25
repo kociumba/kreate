@@ -67,11 +67,14 @@ Lang[] supported = [go, d, odin];
 /// 
 /// **IMPORTANT** `Log.fatal()` exits with `exit(1)` after logging. 
 struct Log {
-    static const string infoCol = "\x1B[38;5;87m";
+    static const string infoCol = "\x1B[38;5;157m";
     static const string warnCol = "\x1B[38;5;214m";
     static const string fataCol = "\x1B[38;5;196m";
     static const string erroCol = "\x1B[38;5;202m";
+    static const string okCol = "\x1B[38;5;154m";
     static const string reset = "\x1B[0m";
+    static const string dim = "\x1B[2m";
+    static const string clearLine = "\x1B[2K";
 
     /// make this noop for now
     static string timestamp() {
@@ -82,22 +85,22 @@ struct Log {
 
     /// logs an info message
     static void info(string msg) {
-        writeln(timestamp(), infoCol, " [INFO] ", reset, msg);
+        writeln(timestamp(), infoCol, "[INFO] ", reset, msg);
     }
 
     /// logs a warning message
     static void warn(string msg) {
-        writeln(timestamp(), warnCol, " [WARN] ", reset, msg);
+        writeln(timestamp(), warnCol, "[WARN] ", reset, msg);
     }
 
     /// logs an error message
     static void error(string msg) {
-        writeln(timestamp(), erroCol, " [ERRO] ", reset, msg);
+        writeln(timestamp(), erroCol, "[ERRO] ", reset, msg);
     }
 
     /// logs a fatal error message and exits using `exit(1)`
     static void fatal(string msg) {
-        writeln(timestamp(), fataCol, " [FATA] ", reset, msg);
+        writeln(timestamp(), fataCol, "[FATA] ", reset, msg);
         exit(1);
     }
 }
@@ -242,6 +245,8 @@ bool needsRebuild(string filePath, string buildDir) {
 
 /// builds and executes a build command for a given target
 bool executeBuildCommand(Target target) {
+    write("Building target: " ~ target.name ~ "...");
+
     auto start = MonoTime.currTime;
     string[] cmd;
     string lang = detectLanguage(target.sourceFiles);
@@ -255,19 +260,35 @@ bool executeBuildCommand(Target target) {
     } else if (lang == "odin") {
         cmd = buildOdinCommand(target);
     } else {
-        Log.fatal("Unsupported language: " ~ lang);
+        Log.fatal("Unsupported language: " ~ lang); // should always fail before this check
         return false;
     }
 
-    Log.info("Executing: " ~ cmd.join(" "));
+    // i don't have any ideas how to integrate this into the new logging, but it should be availible 
+    // Log.info("Executing: " ~ cmd.join(" "));
     auto result = execute(cmd);
     if (result.status != 0) {
-        Log.error("Build failed: " ~ result.output);
+        Log.error(Log.clearLine 
+            ~ "\rBuilding target: " 
+            ~ target.name 
+            ~ Log.erroCol 
+            ~ " [ERRO] " 
+            ~ Log.reset
+            ~ ":\n" 
+            ~ result.output);
         return false;
     }
 
     auto duration = MonoTime.currTime - start;
-    Log.info("Build successful, for target '" ~ target.name ~ "' in: " ~ duration.toString());
+    Log.info(Log.clearLine
+        ~ "\rBuilding target: " 
+        ~ target.name 
+        ~ Log.okCol 
+        ~ " [OK] " 
+        ~ Log.reset 
+        ~ Log.dim 
+        ~ duration.toString() 
+        ~ Log.reset);
     return true;
 }
 
@@ -398,8 +419,6 @@ bool buildTarget(ref Target target) {
         Log.info("Target " ~ target.name ~ " is up to date");
         return true;
     }
-
-    Log.info("Building target: " ~ target.name);
 
     foreach (ref dependency; target.dependencies) {
         if (!buildTarget(dependency)) {
