@@ -101,7 +101,8 @@ struct Log {
     /// logs a fatal error message and exits using `exit(1)`
     static void fatal(string msg) {
         writeln(timestamp(), fataCol, "[FATA] ", reset, msg);
-        exit(1);
+        if (!hasArg("--ignore-fatal"))
+            exit(1);
     }
 }
 
@@ -234,7 +235,7 @@ FileChecksum loadChecksum(string filePath, string buildDir) {
 
 /// determines if a target needs to be rebilt based on the existance of it's output and the checksum data
 bool needsRebuild(string filePath, string buildDir) {
-    if (hasArg("-f") | hasArg("--force"))
+    if (hasArg("-f") || hasArg("--force"))
         return true;
 
     FileChecksum oldChecksum = loadChecksum(filePath, buildDir);
@@ -622,33 +623,27 @@ bool[string] builtTargets;
 bool[string] rebuiltTargets;
 
 /// populates the dependency graph with data fro sorting
-void buildDependencyGraph() {
-    foreach (ref target; targets) {
+void buildDependencyGraph(Target[] _targets) {
+    foreach (ref target; _targets) {
         targetMap[target.name] = target;
         foreach (ref dep; target.dependencies) {
             dependentTargets[dep.name] ~= target;
         }
     }
-
-    /// debug logic, left in couse it can be usefull
-    if (hasArg("-g") | hasArg("--graph")) {
-        writeln("dep graph: ", targetMap);
-        writeln("dependents: ", dependentTargets);
-    }
 }
 
 /// uses kahn's algorithm to sort the graph topologically eliminating duplicates
-Target[] topologicalSort() {
-    buildDependencyGraph();
+Target[] topologicalSort(Target[] _targets) {
+    buildDependencyGraph(_targets);
     Target[] sortedOrder;
     Target[] queue;
 
     Target[][string] remainingDeps;
-    foreach (ref target; targets) {
+    foreach (ref target; _targets) {
         remainingDeps[target.name] = target.dependencies.dup;
     }
 
-    foreach (ref target; targets) {
+    foreach (ref target; _targets) {
         if (remainingDeps[target.name].length == 0) {
             queue ~= target;
         }
@@ -662,9 +657,10 @@ Target[] topologicalSort() {
         if (current.name in dependentTargets) {
             foreach (ref dependent; dependentTargets[current.name]) {
                 auto depName = dependent.name;
-                remainingDeps[depName] = remainingDeps[depName].remove!(
-                    d => d.name == current.name
-                );
+                remainingDeps[depName] = remainingDeps[depName].filter!(
+                    d => d.name != current.name
+                )
+                    .array;
 
                 if (remainingDeps[depName].length == 0) {
                     queue ~= dependent;
@@ -673,32 +669,49 @@ Target[] topologicalSort() {
         }
     }
 
-    if (sortedOrder.length != targets.length) {
+    if (sortedOrder.length != _targets.length) {
         Log.fatal("Circular dependency detected in target graph");
         return [];
+    }
+
+    /// debug logic, left in couse it can be usefull
+    if (hasArg("-g") || hasArg("--graph")) {
+        // writeln("dep graph: ", targetMap);
+        // writeln("dependents: ", dependentTargets);
+        string orderMessage;
+        orderMessage = "Target build order: ";
+        for (int i; i < sortedOrder.length; i++) {
+            if ((i + 1) != sortedOrder.length)
+                orderMessage ~= sortedOrder[i].name ~ " -> ";
+            if ((i + 1) == sortedOrder.length)
+                orderMessage ~= sortedOrder[i].name;
+        }
+        Log.info(orderMessage);
     }
 
     return sortedOrder;
 }
 
 /// executes the build of all targets or the ones that are passed in
-void kreateBuild(string[] targetNames = []) {
+void kreateBuild(Target[] _targets = []) {
     Target[] buildOrder;
 
-    if (targetNames.length == 0) {
-        buildOrder = topologicalSort();
+    if (_targets.length == 0) {
+        buildOrder = topologicalSort(targets);
         if (buildOrder.length == 0)
             return;
     } else {
         bool[string] toBuild;
-        foreach (name; targetNames) {
-            if (name !in targetMap) {
-                Log.fatal("Target not found: " ~ name);
-                return;
-            }
-            collectTargets(targetMap[name], toBuild);
+        foreach (target; _targets) {
+            collectTargets(target, toBuild);
         }
-        buildOrder = topologicalSort().filter!(t => t.name in toBuild).array;
+        Target[] targetList;
+        foreach (target; targets) {
+            if (target.name in toBuild) {
+                targetList ~= target;
+            }
+        }
+        buildOrder = topologicalSort(targetList);
         if (buildOrder.length == 0)
             return;
     }
@@ -728,6 +741,8 @@ void kreateBuild(string[] targetNames = []) {
 
 /// recursive target collection used for custom builds
 void collectTargets(ref Target target, ref bool[string] toBuild) {
+    if (target.name in toBuild && toBuild[target.name])
+        return;
     toBuild[target.name] = true;
     foreach (ref dep; target.dependencies) {
         collectTargets(dep, toBuild);

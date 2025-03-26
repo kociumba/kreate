@@ -6,36 +6,65 @@ It's written in d to take advantage of `rdmd`, which essentially turns d into a 
 
 To use kreate, simply copy `kreate.d` into your project, import it into your build script (e.g., `build.d`), and run it with rdmd `rdmd build.d`.
 
-If you want faster builds you can compile this system using something like `dmd build.d -i kreate.d`, this skips rdmd having rebuild your build system but also locks your confiuguration untill you rebuild manually.
+If you want faster builds you can compile this system using something like `dmd build.d -i kreate.d`, this skips rdmd having to rebuild your build system but also locks your confiuguration untill you rebuild manually.
 
-**Example build:**
+### Example build script:
 
-```d:build.d
+```d
 module build;
 
 import kreate; // imports can be relative paths when using rdmd
 
 void main(string[] args) {
-    project("gabagool", "0.0.1", ["d", "go"], args); // create a sample project
+    project("gabagool", "0.0.1", ["d", "go"], args); // create a sample project with D and GO support
 
-    executable("myapp", ["src/main.odin"]); // kreate has  basic support for d, go and odin, anything else requires using custom targets
+    auto odinApp = executable("myapp", ["src/main.odin"]); // kreate has  basic support for d, go and odin, anything else requires using custom targets
 
+    // you can use the `findFile()` and `findGlobal()` functions to find respectively files in the current dir and below it or in directories from the `INCLUDE` env variable
     customTarget("odin-docs", [findFile("main.odin")], "src/main.odin-doc", ["odin", "doc", "src", "-out:main"]);
 
-    kreateInit(); // if not initialized kreate will not do anything
+    kreateInit(); // Always call this at the end of your build script to ensure kreate's default functionality
 }
 ```
 
-If you pass the `args` from your main to the kreate `project`, you can use cli commands to control what kreate does.
+If you pass the `args` from your main to the `project` function, you can use cli commands to control what kreate does.For example `rdmd build.d build`, performs a build of all targets.
 
-This means you can use it like this: `rdmd build.d build`
+## Subcommands:
 
-Right now there are 2 built in commands:
+Built into kreate there are:
 
-- `build`: simply builds all targets
-- `clean`: removes the bin and build directories(by default kreate puts any internal files in the build directory and any executable output into the bin directory)
+- `build`: Simply builds all targets
+- `clean`: Removes the bin and build directories (by default, kreate places internal files in build and executable output in bin)
 
-you can also use flags to force certain behaviour:
+to create your own subcommands use something like this to your build script:
 
-- `-f` or `--force` to force a rebuild not matter what the checksums checks return
-- `-g` or `--graph` prints out the dependency graph created by kreate, usefull for debugging
+```d
+if (hasSubcommand("build-odin")) {
+    kreateBuild([odinApp]);
+    return;
+}
+```
+
+then you can use this subcommand like so: `rdmd build.d build-odin`
+
+> [!IMPORTANT]
+> You can overrite the built in `build` and `clean` subcommands this way
+
+## Flags:
+
+Built-in flags are:
+
+- `-f` or `--force` Forces a rebuild regardless of checksum comparisons.
+- `-g` or `--graph` Prints the dependency graph created by kreate, useful for debugging.
+- `--ignore-fatal` Continues execution after a fatal error.
+
+> [!WARNING]
+> `--ignore-fatal` can cause unexpected behaviour, since create will continiue on `Log.fatal()` which it wasn't designed to handle
+
+To create custom flags, add something like this to your build script:
+
+```d
+if (hasArg("--hello") || hasArg("-h")) {
+    writeln("hello")
+}
+```
