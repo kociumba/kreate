@@ -17,14 +17,14 @@ import std.process;
 /// main project structure, you never have to interact with it, it is managed by kreate
 struct Project {
     string name;
-    string ver;
+    string ver; // TODO: this versioning is required right now, but not used | remove or find a use
     string buildDir;
     string binDir;
     string[] targetLangs;
     string[] cliArgs;
 }
 
-/// the instance of @Project managed by create
+/// the instance of `Project` managed by create
 Project projectConfig = Project(null);
 
 /// Represents a language with an internal name and allowed extensions
@@ -51,7 +51,7 @@ struct Target {
     string[] flags;
     string[] customCommand;
     string mainDir;
-    string[] importPaths;
+    string[] importPaths; // TODO: actually use this for -I or something
 }
 
 /// list of created targets
@@ -616,7 +616,7 @@ string findGlobal(string name) {
     return "";
 }
 
-Target[string] targetMap;
+Target[string] targetMap; // interesting way to do arrays, so essentially any array can be a map 🤷
 Target[][string] dependentTargets;
 bool[string] builtTargets;
 bool[string] rebuiltTargets;
@@ -630,7 +630,8 @@ void buildDependencyGraph() {
         }
     }
 
-    if (hasArg("-graph")) {
+    /// debug logic, left in couse it can be usefull
+    if (hasArg("-g") | hasArg("--graph")) {
         writeln("dep graph: ", targetMap);
         writeln("dependents: ", dependentTargets);
     }

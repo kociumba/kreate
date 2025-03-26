@@ -18,9 +18,9 @@ import kreate; // imports can be relative paths when using rdmd
 void main(string[] args) {
     project("gabagool", "0.0.1", ["d", "go"], args); // create a sample project
 
-    executable("myapp", ["src/main.odin"]); // kreate has basic support for d, go and odin, anything else requires using custom targets
+    executable("myapp", ["src/main.odin"]); // kreate has  basic support for d, go and odin, anything else requires using custom targets
 
-    customTarget("odin-docs", ["src/main.odin"], "src/main.odin-doc", ["odin", "doc", "src", "-out:main"]);
+    customTarget("odin-docs", [findFile("main.odin")], "src/main.odin-doc", ["odin", "doc", "src", "-out:main"]);
 
     kreateInit(); // if not initialized kreate will not do anything
 }
@@ -34,3 +34,8 @@ Right now there are 2 built in commands:
 
 - `build`: simply builds all targets
 - `clean`: removes the bin and build directories(by default kreate puts any internal files in the build directory and any executable output into the bin directory)
+
+you can also use flags to force certain behaviour:
+
+- `-f` or `--force` to force a rebuild not matter what the checksums checks return
+- `-g` or `--graph` prints out the dependency graph created by kreate, usefull for debugging
