@@ -16,7 +16,7 @@ module build;
 import kreate; // imports can be relative paths when using rdmd
 
 void main(string[] args) {
-    project("gabagool", "0.0.1", ["d", "go"], args); // create a sample project with D and GO support
+    project("gabagool", "0.0.1", ["odin"], args); // create a sample project with ODIN support
 
     auto odinApp = executable("myapp", ["src/main.odin"]); // kreate has  basic support for d, go and odin, anything else requires using custom targets
 
