@@ -246,25 +246,31 @@ bool needsRebuild(string filePath, string buildDir) {
 
 /// builds and executes a build command for a given target
 bool executeBuildCommand(Target target) {
-    write("Building target: " ~ target.name ~ "...");
+    write("Building target: " ~ target.name ~ getBuildLogPadding(target.name) ~ " ... ");
 
     auto start = MonoTime.currTime;
     string[] cmd;
-    string lang = detectLanguage(target.sourceFiles);
+    string lang;
 
     if (target.targetType == TargetType.CUSTOM) {
         cmd = target.customCommand;
-    } else if (lang == "d") {
+        goto execution; // evil goto 💀, quick fix for the `detectLanguage` function throwing for custom targets
+    } 
+    
+    lang = detectLanguage(target.sourceFiles);
+
+    if (lang == "d") {
         cmd = buildDCommand(target);
     } else if (lang == "go") {
         cmd = buildGoCommand(target);
     } else if (lang == "odin") {
         cmd = buildOdinCommand(target);
     } else {
-        Log.fatal("Unsupported language: " ~ lang); // should always fail before this check
+        Log.fatal("\nUnsupported language: " ~ lang); // should always fail before this check
         return false;
     }
 
+    execution:
     // i don't have any ideas how to integrate this into the new logging, but it should be availible 
     // Log.info("Executing: " ~ cmd.join(" "));
     auto result = execute(cmd);
@@ -273,6 +279,8 @@ bool executeBuildCommand(Target target) {
                 ~ "\rBuilding target: "
                 ~ target.name
                 ~ Log.erroCol
+                ~ getBuildLogPadding(
+                    target.name)
                 ~ " [ERRO] "
                 ~ Log.reset
                 ~ ":\n"
@@ -285,12 +293,34 @@ bool executeBuildCommand(Target target) {
             ~ "\rBuilding target: "
             ~ target.name
             ~ Log.okCol
+            ~ getBuildLogPadding(
+                target.name)
             ~ " [OK] "
             ~ Log.reset
             ~ Log.dim
             ~ duration.toString()
             ~ Log.reset);
     return true;
+}
+
+/// internal function to get space padding for the build process logging
+string getBuildLogPadding(string targetName) {
+    int longestName;
+    foreach (target; targets) {
+        if (target.name.length > longestName)
+            longestName = target.name.length;
+    }
+    longestName += 5; // always extra padding
+
+    string r;
+    if (targetName.length > longestName) {
+        return r;
+    }
+
+    for (int i; i < longestName - targetName.length; i++) {
+        r ~= " ";
+    }
+    return r;
 }
 
 /// builds a basic d compilation command
@@ -357,7 +387,7 @@ string[] buildGoCommand(Target target) {
 /// builds a basic odin compilation command
 string[] buildOdinCommand(Target target) {
     string mainDir = inferMainDir(target.sourceFiles);
-    string[] cmd = ["odin", "build ", mainDir];
+    string[] cmd = ["odin", "build", mainDir];
 
     if (target.flags.length > 0) {
         cmd ~= target.flags;
@@ -410,7 +440,7 @@ string detectLanguage(string[] sourceFiles) {
 
     auto name = replace(ext, ".", "");
 
-    Log.fatal("Unsupported or not enabled language detected: " ~ name);
+    Log.fatal("\nUnsupported or not enabled language detected: " ~ name);
     return ""; // doesn't matter what we return since Log.fatal exits either way
 }
 
@@ -448,12 +478,14 @@ Target executable(string name, string[] sourceFiles, Target[] dependencies = [],
     string lang = detectLanguage(sourceFiles);
     string[] flags;
 
-    if (lang == "d") {
-        flags = ["-O", "-release"];
-    } else if (lang == "go") {
-        flags = ["-ldflags", "-s -w"];
-    } else if (lang == "odin") {
-        flags = ["-o:speed"];
+    if (hasArg("-r") || hasArg("--release")) {
+        if (lang == "d") {
+            flags = ["-O", "-release"];
+        } else if (lang == "go") {
+            flags = ["-ldflags", "-s -w"];
+        } else if (lang == "odin") {
+            flags = ["-o:speed"];
+        }
     }
 
     string mainDir = inferMainDir(sourceFiles);
@@ -482,12 +514,14 @@ Target staticLib(string name, string[] sourceFiles, Target[] dependencies = [], 
     string lang = detectLanguage(sourceFiles);
     string[] flags;
 
-    if (lang == "d") {
-        flags = ["-O", "-release"];
-    } else if (lang == "go") {
-        flags = ["-ldflags", "-s -w"];
-    } else if (lang == "odin") {
-        flags = ["-o:speed"];
+    if (hasArg("-r") || hasArg("--release")) {
+        if (lang == "d") {
+            flags = ["-O", "-release"];
+        } else if (lang == "go") {
+            flags = ["-ldflags", "-s -w"];
+        } else if (lang == "odin") {
+            flags = ["-o:speed"];
+        }
     }
 
     string mainDir = inferMainDir(sourceFiles);
@@ -526,12 +560,14 @@ Target dynamicLib(string name,
     string lang = detectLanguage(sourceFiles);
     string[] flags;
 
-    if (lang == "d") {
-        flags = ["-O", "-release"];
-    } else if (lang == "go") {
-        flags = ["-ldflags", "-s -w"];
-    } else if (lang == "odin") {
-        flags = ["-o:speed"];
+    if (hasArg("-r") || hasArg("--release")) {
+        if (lang == "d") {
+            flags = ["-O", "-release"];
+        } else if (lang == "go") {
+            flags = ["-ldflags", "-s -w"];
+        } else if (lang == "odin") {
+            flags = ["-o:speed"];
+        }
     }
 
     string mainDir = inferMainDir(sourceFiles);

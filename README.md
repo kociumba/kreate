@@ -27,7 +27,7 @@ void main(string[] args) {
 }
 ```
 
-If you pass the `args` from your main to the `project` function, you can use cli commands to control what kreate does.For example `rdmd build.d build`, performs a build of all targets.
+If you pass the `args` from your main to the `project` function, you can use cli commands to control what kreate does. For example `rdmd build.d build`, performs a build of all targets.
 
 ## Subcommands:
 
@@ -56,6 +56,7 @@ Built-in flags are:
 
 - `-f` or `--force` Forces a rebuild regardless of checksum comparisons.
 - `-g` or `--graph` Prints the dependency graph created by kreate, useful for debugging.
+- `-r` or `--release` Adds optimisation and "release" mode flags to builds of the supported languages.
 - `--ignore-fatal` Continues execution after a fatal error.
 
 > [!WARNING]
@@ -68,3 +69,11 @@ if (hasArg("--hello") || hasArg("-h")) {
     writeln("hello")
 }
 ```
+
+## Examples
+
+Right now there is a single example of building an odin+c executable in the [excamples](./examples/) directory.
+To run this example simply `git clone` the repo and `cd` into it, the run `rdmd .\examples\windows_odin+c\build.d build`.
+
+> [!NOTE]
+> these examples will always try to use absolute paths and `findFile()`, this is because they are designed to be executable from the bottom of the repo, your builds will likely be simpler
