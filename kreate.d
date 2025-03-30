@@ -38,6 +38,7 @@ enum TargetType {
     EXECUTABLE,
     STATIC_LIB,
     DYNAMIC_LIB,
+    CALLBACK,
     CUSTOM,
 }
 
@@ -52,6 +53,7 @@ struct Target {
     string[] customCommand;
     string mainDir;
     string[] importPaths; // TODO: actually use this for -I or something
+    Error delegate(ref Target t) callback = null; /// used for code targets, since not everything should be done in the shell
 }
 
 /// list of created targets
@@ -245,6 +247,8 @@ bool needsRebuild(string filePath, string buildDir) {
 }
 
 /// builds and executes a build command for a given target
+/// 
+/// Since the addition of callback targets, this also executes them, that is because callbacks are treated the same as commands
 bool executeBuildCommand(Target target) {
     write("Building target: " ~ target.name ~ getBuildLogPadding(target.name) ~ " ... ");
 
@@ -252,11 +256,19 @@ bool executeBuildCommand(Target target) {
     string[] cmd;
     string lang;
 
+    // well, well, well the goto's strike again
+    if (target.callback !is null && target.targetType == TargetType.CALLBACK) {
+        auto result = target.callback(target);
+        if (result !is null)
+            goto printError;
+        goto printOk;
+    }
+
     if (target.targetType == TargetType.CUSTOM) {
         cmd = target.customCommand;
         goto execution; // evil goto 💀, quick fix for the `detectLanguage` function throwing for custom targets
-    } 
-    
+    }
+
     lang = detectLanguage(target.sourceFiles);
 
     if (lang == "d") {
@@ -270,11 +282,12 @@ bool executeBuildCommand(Target target) {
         return false;
     }
 
-    execution:
+execution:
     // i don't have any ideas how to integrate this into the new logging, but it should be availible 
     // Log.info("Executing: " ~ cmd.join(" "));
     auto result = execute(cmd);
     if (result.status != 0) {
+    printError:
         Log.error(Log.clearLine
                 ~ "\rBuilding target: "
                 ~ target.name
@@ -288,6 +301,7 @@ bool executeBuildCommand(Target target) {
         return false;
     }
 
+printOk:
     auto duration = MonoTime.currTime - start;
     Log.info(Log.clearLine
             ~ "\rBuilding target: "
@@ -593,7 +607,8 @@ Target customTarget(string name,
     string[] sourceFiles,
     string outputFile,
     string[] customCommand,
-    Target[] dependencies = []) {
+    Target[] dependencies = []
+) {
     Target target = Target(
         name,
         sourceFiles,
@@ -608,6 +623,73 @@ Target customTarget(string name,
 
     targets ~= target;
     return target;
+}
+
+Target customCallback(string name,
+    string[] sourceFiles = [],
+    string outputFile = null,
+    Error delegate(ref Target t) callback,
+    Target[] dependencies = []
+) {
+    if (callback is null) {
+        Log.fatal("can not register a callback target without the callback function");
+    }
+
+    Target target = Target(
+        name,
+        sourceFiles,
+        TargetType.CALLBACK,
+        outputFile,
+        dependencies,
+        [],
+        [],
+        inferMainDir(sourceFiles),
+        [],
+        callback,
+    );
+
+    targets ~= target;
+    return target;
+}
+
+/// move a source file into a destination directory
+Target copyFile(string name,
+    string sourceFile = null,
+    string outputFile = null,
+    Target[] dependencies = []
+) {
+    if (sourceFile == null || outputFile == null)
+        Log.fatal("can not move files without both detination and source");
+
+    return customCallback(name, [sourceFile], outputFile,
+        (ref Target t) {
+        try {
+            string absSource = asNormalizedPath(asAbsolutePath(sourceFile)).array;
+            string absOutput = asNormalizedPath(asAbsolutePath(outputFile)).array;
+
+            if (!exists(absSource)) {
+                Log.fatal("Source file does not exist: " ~ absSource);
+            }
+
+            bool dir;
+            if (exists(absOutput)) dir = isDir(absOutput); else dir = false;
+            string finalOutputPath = dir ? buildPath(absOutput, baseName(absSource)) : absOutput;
+
+            mkdirRecurse(dirName(finalOutputPath));
+
+            if (exists(finalOutputPath)) {
+                remove(finalOutputPath);
+            }
+
+            copy(absSource, finalOutputPath);
+            return null;
+        } catch (FileException e) {
+            Log.fatal("could not move the source file into destination");
+            return new Error("could not move the file into destination");
+        }
+    },
+        dependencies,
+    );
 }
 
 /// simple function that recursively finds a file in any location beneeth the current dir

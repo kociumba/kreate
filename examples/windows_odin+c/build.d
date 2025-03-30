@@ -22,23 +22,19 @@ void main(string[] args) {
         ["cmd", "/c", fullCmd]
     );
 
-    auto moveLibTarget = customTarget(
+    // uses the new copyFile target, that is possible thanks to callback targets
+    auto copyLibTarget = copyFile(
         "moveLib",
-        [findFile("/libmylib.a")],
-        dirName(findFile("main.odin")) ~ "/libmylib.a",
-        [
-            "powershell", "-Command", "Copy-Item",
-            "-Path", "\"" ~ findFile("\\mylib.o") ~ "\"",
-            "-Destination", "\"" ~ dirName(findFile("main.odin")) ~ "\\" ~ "\""
-        ],
+        projectConfig.buildDir ~ "/mylib.o",
+        dirName(findFile("main.odin")) ~ "/mylib.o",
         [myLibTarget]
     );
 
     // Odin executable that depends on the C library
-    auto odinApp = executable(
+    executable(
         "myapp-odin",
         [findFile("src/odin/main.odin")],
-        [myLibTarget, moveLibTarget]
+        [myLibTarget, copyLibTarget]
     );
 
     kreateInit();
