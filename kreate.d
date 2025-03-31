@@ -692,6 +692,16 @@ Target copyFile(string name,
     );
 }
 
+// simple overload
+Target copyFile(string source, string destination, Target[] deps = []) {
+    return copyFile(
+        "copy_" ~ baseName(source),
+        source,
+        destination,
+        deps,
+    );
+}
+
 /// simple function that recursively finds a file in any location beneeth the current dir
 /// Returns: the absolute path to the found file
 /// Throws: if the path can not befound the function will `exit(1)`

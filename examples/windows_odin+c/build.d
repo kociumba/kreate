@@ -21,13 +21,12 @@ void main(string[] args) {
         projectConfig.buildDir ~ "/libmylib.a",
         ["cmd", "/c", fullCmd]
     );
-
+    
     // uses the new copyFile target, that is possible thanks to callback targets
     auto copyLibTarget = copyFile(
-        "moveLib",
         projectConfig.buildDir ~ "/mylib.o",
         dirName(findFile("main.odin")) ~ "/mylib.o",
-        [myLibTarget]
+        [myLibTarget] // this essentially signals kreate that the file can not be copied until it has been created in this step
     );
 
     // Odin executable that depends on the C library
