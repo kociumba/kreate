@@ -672,7 +672,10 @@ Target copyFile(string name,
             }
 
             bool dir;
-            if (exists(absOutput)) dir = isDir(absOutput); else dir = false;
+            if (exists(absOutput))
+                dir = isDir(absOutput);
+            else
+                dir = false;
             string finalOutputPath = dir ? buildPath(absOutput, baseName(absSource)) : absOutput;
 
             mkdirRecurse(dirName(finalOutputPath));
@@ -700,6 +703,37 @@ Target copyFile(string source, string destination, Target[] deps = []) {
         destination,
         deps,
     );
+}
+
+/// use to remove a specific path during the build, preferably use absolute paths, but `delPath` will try to expand relative ones
+Target delPath(string name,
+    string path,
+    Target[] dependencies = []
+) {
+    return customCallback(
+        name,
+        [],
+        "",
+        (ref Target t) {
+        try {
+            string absPath = asNormalizedPath(asAbsolutePath(path)).array;
+
+            if (exists(absPath)) {
+                remove(absPath);
+            }
+
+            return null;
+        } catch (FileException e) {
+            return new Error("failed to remove path: " ~ path);
+        }
+    },
+        dependencies
+    );
+}
+
+// again simple callback for auto naming
+Target delPath(string path, Target[] deps = []) {
+    return delPath("remove[" ~ relativePath(path) ~ "]", path, deps);
 }
 
 /// simple function that recursively finds a file in any location beneeth the current dir
@@ -892,8 +926,14 @@ void kreateClean() {
     Log.info("Clean completed successfully");
 }
 
+bool wasKreateInitCalled = false;
+
 /// initializes and registers the kreate build system for execution
 void kreateInit() {
+    if (wasKreateInitCalled) {
+        return;
+    }
+
     if (projectConfig.cliArgs.length > 1) {
         if (hasSubcommand("build")) {
             kreateBuild();
@@ -912,4 +952,14 @@ void kreateInit() {
     ");
 
     kreateBuild();
+    wasKreateInitCalled = true;
+}
+
+version (NO_EXPERIMENTAL) {
+
+} else {
+    static ~this() {
+        /// INFO: EXPERIMENTAL | uses a module destructor to call `kreateInit` at the end of main
+        kreateInit();
+    }
 }

@@ -30,11 +30,13 @@ void main(string[] args) {
     );
 
     // Odin executable that depends on the C library
-    executable(
+    auto odinApp = executable(
         "myapp-odin",
         [findFile("src/odin/main.odin")],
         [myLibTarget, copyLibTarget]
     );
 
-    kreateInit();
+    delPath(dirName(findFile("main.odin")) ~ "/mylib.o", [odinApp]);
+
+    // kreateInit(); // experimental kreate feature eliminates the need to call kreateInit at the end of main
 }
